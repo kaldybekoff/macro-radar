@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 
 import requests
-from bs4 import BeautifulSoup
 
 from macro_radar.models import Observation
 
 
 FX_URL = "https://nationalbank.kz/rss/get_rates.cfm?fdate={date}"
 NBK_DATA_URL = "https://data.nationalbank.kz/"
+NBK_INDICATORS_URL = "https://data.nationalbank.kz/api/indicators/latest"
 
 
 def parse_usd_rate(xml: bytes) -> float:
@@ -24,21 +23,15 @@ def parse_usd_rate(xml: bytes) -> float:
     raise ValueError("USD rate not found in NBK response")
 
 
-def parse_policy_rates(text: str) -> tuple[float, float]:
-    normalized = " ".join(text.split()).replace(",", ".")
-    base_match = re.search(
-        r"Базовая\s+ставка\s*(?:[-–—:]\s*)?(\d+(?:\.\d+)?)\s*%",
-        normalized,
-        re.IGNORECASE,
-    )
-    tonia_match = re.search(
-        r"TONIA\s*(?:[-–—:]\s*)?(\d+(?:\.\d+)?)\s*%",
-        normalized,
-        re.IGNORECASE,
-    )
-    if not base_match or not tonia_match:
-        raise ValueError("Base rate or TONIA not found on NBK data page")
-    return float(base_match.group(1)), float(tonia_match.group(1))
+def parse_policy_snapshot(payload: dict[str, object]) -> tuple[date, float, float]:
+    """Parse the public NBK latest-indicators API response."""
+    try:
+        period = date.fromisoformat(str(payload["date"]))
+        base_rate = float(payload["baseRate"])
+        tonia_rate = float(payload["tonia"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Invalid NBK indicators response") from exc
+    return period, base_rate, tonia_rate
 
 
 class NbkFxConnector:
@@ -84,22 +77,26 @@ class NbkPolicyConnector:
         self.manual_tonia_rate = manual_tonia_rate
 
     def fetch(self) -> list[Observation]:
-        base_rate = self.manual_base_rate
-        tonia_rate = self.manual_tonia_rate
-        if base_rate is None or tonia_rate is None:
-            response = requests.get(NBK_DATA_URL, timeout=self.timeout)
+        # Official API is always primary. Manual settings are only used when
+        # the API is temporarily unavailable or returns an invalid payload.
+        try:
+            response = requests.get(NBK_INDICATORS_URL, timeout=self.timeout)
             response.raise_for_status()
-            page_text = BeautifulSoup(response.text, "html.parser").get_text(" ", strip=True)
-            parsed_base, parsed_tonia = parse_policy_rates(page_text)
-            base_rate = base_rate if base_rate is not None else parsed_base
-            tonia_rate = tonia_rate if tonia_rate is not None else parsed_tonia
+            period, base_rate, tonia_rate = parse_policy_snapshot(response.json())
+            source_url = NBK_INDICATORS_URL
+        except (requests.RequestException, ValueError, TypeError):
+            if self.manual_base_rate is None or self.manual_tonia_rate is None:
+                raise
+            period = date.today()
+            base_rate = self.manual_base_rate
+            tonia_rate = self.manual_tonia_rate
+            source_url = NBK_DATA_URL
 
-        today = date.today()
         fetched_at = datetime.now(timezone.utc)
         common = {
-            "period": today,
+            "period": period,
             "source": "NBK",
-            "source_url": NBK_DATA_URL,
+            "source_url": source_url,
             "frequency": "daily",
             "fetched_at": fetched_at,
         }
