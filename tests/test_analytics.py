@@ -49,3 +49,28 @@ def test_live_source_wins_over_later_legacy_import():
     ]
     latest = latest_per_indicator(prepare_frame(rows))
     assert latest.loc["USD_KZT", "value"] == 465
+
+
+def test_cpi_snapshot_collection_date_is_ignored():
+    rows = [
+        {
+            "indicator_code": "CPI_YOY",
+            "period": "2026-06-01",
+            "value": 10.3,
+            "unit": "%",
+            "source": "BNS",
+            "frequency": "monthly",
+            "fetched_at": "2026-07-01T08:00:00+00:00",
+        },
+        {
+            "indicator_code": "CPI_YOY",
+            "period": "2026-07-15",
+            "value": 10.3,
+            "unit": "%",
+            "source": "Legacy snapshot",
+            "frequency": "monthly",
+            "fetched_at": "2026-07-15T10:00:00+00:00",
+        },
+    ]
+    latest = latest_per_indicator(prepare_frame(rows))
+    assert str(latest.loc["CPI_YOY", "period"].date()) == "2026-06-01"

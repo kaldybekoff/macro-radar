@@ -15,6 +15,12 @@ def prepare_frame(records: list[dict[str, object]]) -> pd.DataFrame:
     frame["fetched_at"] = pd.to_datetime(frame["fetched_at"], errors="coerce", utc=True)
     frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
     frame["source_priority"] = (~frame["source"].astype(str).str.startswith("Legacy")).astype(int)
+    # Legacy snapshots used the collection date for CPI instead of the official
+    # reference month. Prefer the proper monthly rows from BNS/Legacy Excel.
+    cpi_mask = frame["indicator_code"].astype(str).str.startswith("CPI_")
+    legacy_snapshot = frame["source"].astype(str).eq("Legacy snapshot")
+    if (cpi_mask & ~legacy_snapshot).any():
+        frame = frame.loc[~(cpi_mask & legacy_snapshot)].copy()
     return frame.dropna(subset=["period", "value"]).sort_values("period")
 
 
