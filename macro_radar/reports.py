@@ -9,7 +9,13 @@ import pandas as pd
 from pptx import Presentation
 from pptx.util import Inches
 
-from .analytics import build_summary, latest_per_indicator, prepare_frame, previous_change
+from .analytics import (
+    build_summary,
+    canonical_series,
+    latest_per_indicator,
+    prepare_frame,
+    previous_change,
+)
 from .models import INDICATORS
 
 
@@ -33,7 +39,7 @@ def build_excel(records: list[dict[str, object]]) -> bytes:
 def _chart_image(frame: pd.DataFrame, codes: list[str], title: str) -> BytesIO:
     figure, axis = plt.subplots(figsize=(8.8, 4.4))
     for code in codes:
-        series = frame.loc[frame["indicator_code"] == code].sort_values("period")
+        series = canonical_series(frame, code)
         if series.empty:
             continue
         axis.plot(

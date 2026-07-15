@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from macro_radar.analytics import (
+    canonical_series,
     comparison,
     freshness_status,
     latest_per_indicator,
@@ -142,18 +143,22 @@ st.dataframe(pd.DataFrame(comparison_rows), width="stretch", hide_index=True)
 left, right = st.columns(2)
 with left:
     st.subheader("USD/KZT")
-    fx = frame.loc[frame["indicator_code"] == "USD_KZT", ["period", "value"]]
+    fx = canonical_series(frame, "USD_KZT")[["period", "value"]]
     if not fx.empty:
         st.line_chart(fx.set_index("period"), y="value")
 with right:
     st.subheader("Brent")
-    oil = frame.loc[frame["indicator_code"] == "BRENT_USD", ["period", "value"]]
+    oil = canonical_series(frame, "BRENT_USD")[["period", "value"]]
     if not oil.empty:
         st.line_chart(oil.set_index("period"), y="value")
 
 st.subheader("Инфляция")
 inflation_codes = ["CPI_YOY", "CPI_FOOD_YOY", "CPI_NON_FOOD_YOY", "CPI_SERVICES_YOY"]
-inflation = frame.loc[frame["indicator_code"].isin(inflation_codes), ["period", "indicator_code", "value"]]
+inflation_parts = [canonical_series(frame, code) for code in inflation_codes]
+inflation = pd.concat(
+    [part for part in inflation_parts if not part.empty],
+    ignore_index=True,
+) if any(not part.empty for part in inflation_parts) else pd.DataFrame()
 if not inflation.empty:
     inflation_wide = inflation.pivot_table(index="period", columns="indicator_code", values="value", aggfunc="last")
     inflation_wide = inflation_wide.rename(columns={code: INDICATORS[code]["label"] for code in inflation_codes})

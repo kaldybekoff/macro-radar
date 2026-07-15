@@ -14,22 +14,40 @@ def prepare_frame(records: list[dict[str, object]]) -> pd.DataFrame:
     frame["period"] = pd.to_datetime(frame["period"], errors="coerce")
     frame["fetched_at"] = pd.to_datetime(frame["fetched_at"], errors="coerce", utc=True)
     frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
+    frame["source_priority"] = (~frame["source"].astype(str).str.startswith("Legacy")).astype(int)
     return frame.dropna(subset=["period", "value"]).sort_values("period")
+
+
+def canonical_series(frame: pd.DataFrame, code: str) -> pd.DataFrame:
+    series = frame.loc[frame["indicator_code"] == code].copy()
+    if series.empty:
+        return series
+    if "source_priority" not in series.columns:
+        series["source_priority"] = (
+            ~series["source"].astype(str).str.startswith("Legacy")
+        ).astype(int)
+    return (
+        series.sort_values(["period", "source_priority", "fetched_at"])
+        .groupby("period", as_index=False)
+        .tail(1)
+        .sort_values("period")
+    )
 
 
 def latest_per_indicator(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         return frame
     return (
-        frame.sort_values(["period", "fetched_at"])
-        .groupby("indicator_code", as_index=False)
-        .tail(1)
+        pd.concat(
+            [canonical_series(frame, code).tail(1) for code in frame["indicator_code"].unique()],
+            ignore_index=True,
+        )
         .set_index("indicator_code")
     )
 
 
 def comparison(frame: pd.DataFrame, code: str, days: int) -> float | None:
-    series = frame.loc[frame["indicator_code"] == code].sort_values("period")
+    series = canonical_series(frame, code)
     if len(series) < 2:
         return None
     latest = series.iloc[-1]
@@ -43,7 +61,7 @@ def comparison(frame: pd.DataFrame, code: str, days: int) -> float | None:
 
 
 def previous_change(frame: pd.DataFrame, code: str) -> float | None:
-    series = frame.loc[frame["indicator_code"] == code].sort_values("period")
+    series = canonical_series(frame, code)
     if len(series) < 2:
         return None
     return round(float(series.iloc[-1]["value"] - series.iloc[-2]["value"]), 2)
