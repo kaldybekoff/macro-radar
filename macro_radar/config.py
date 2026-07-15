@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -31,6 +32,10 @@ def _optional_float(value: object) -> float | None:
 
 def load_settings(overrides: Mapping[str, object] | None = None) -> Settings:
     values: dict[str, object] = dict(os.environ)
+    local_secrets = ROOT_DIR / ".streamlit" / "secrets.toml"
+    if local_secrets.exists():
+        with local_secrets.open("rb") as file:
+            values.update(tomllib.load(file))
     if overrides:
         values.update(overrides)
 
