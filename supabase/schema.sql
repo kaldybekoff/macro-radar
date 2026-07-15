@@ -49,10 +49,22 @@ begin
 end;
 $$;
 
-drop trigger if exists observations_set_updated_at on public.observations;
-create trigger observations_set_updated_at
-before update on public.observations
-for each row execute function public.set_updated_at();
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_trigger
+        where tgname = 'observations_set_updated_at'
+          and tgrelid = 'public.observations'::regclass
+    ) then
+        execute $trigger$
+            create trigger observations_set_updated_at
+            before update on public.observations
+            for each row execute function public.set_updated_at()
+        $trigger$;
+    end if;
+end;
+$$;
 
 alter table public.observations enable row level security;
 alter table public.ingestion_runs enable row level security;
