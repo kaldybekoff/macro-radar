@@ -69,7 +69,7 @@ repository = get_repository(settings.supabase_url, settings.supabase_service_rol
 
 with st.sidebar:
     st.header("Управление")
-    if st.button("Обновить данные", type="primary", use_container_width=True):
+    if st.button("Обновить данные", type="primary", width="stretch"):
         with st.spinner("Получаем и проверяем данные..."):
             result = run_ingestion(repository, settings, trigger_type="manual")
         if result.status == "success":
@@ -137,7 +137,7 @@ for code in metric_codes:
             "Период": pd.Timestamp(latest.loc[code, "period"]).date(),
         }
     )
-st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+st.dataframe(pd.DataFrame(comparison_rows), width="stretch", hide_index=True)
 
 left, right = st.columns(2)
 with left:
@@ -167,7 +167,7 @@ with export_left:
         data=build_excel(records),
         file_name=f"macro_radar_{date.today().isoformat()}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+        width="stretch",
     )
 with export_right:
     st.download_button(
@@ -175,16 +175,20 @@ with export_right:
         data=build_powerpoint(records, settings.template_path),
         file_name=f"macro_radar_{date.today().isoformat()}.pptx",
         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        use_container_width=True,
+        width="stretch",
     )
 
 with st.expander("Последние запуски обновления"):
     runs = repository.get_recent_runs()
     if runs:
-        st.dataframe(pd.DataFrame(runs), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(runs), width="stretch", hide_index=True)
     else:
         st.caption("Запусков пока нет.")
 
 with st.expander("Исходные данные"):
     display_columns = ["indicator_code", "period", "value", "unit", "source", "quality_status"]
-    st.dataframe(frame[display_columns].sort_values("period", ascending=False), use_container_width=True, hide_index=True)
+    st.dataframe(
+        frame[display_columns].sort_values("period", ascending=False),
+        width="stretch",
+        hide_index=True,
+    )
