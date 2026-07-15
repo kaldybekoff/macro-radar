@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.streamlit/secrets.toml
+.env
+exports/
+Macro_Radar_Latest.pptx
